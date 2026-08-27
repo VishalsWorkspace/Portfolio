@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/data";
@@ -20,11 +20,16 @@ export function ProjectCard({
   project: Project;
   featured?: boolean;
 }) {
+  const hasVideo = Boolean(project.video);
   const [activeImage, setActiveImage] = useState(0);
+  const [activeMedia, setActiveMedia] = useState<"video" | number>(hasVideo ? "video" : 0);
   const [hovering, setHovering] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const isVideoActive = hasVideo && activeMedia === "video";
+
   const handleEnter = () => {
+    if (!isVideoActive) return;
     setHovering(true);
     videoRef.current?.play().catch(() => {});
   };
@@ -34,6 +39,15 @@ export function ProjectCard({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
+  };
+
+  const selectScreenshot = (i: number) => {
+    setHovering(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+    setActiveMedia(i);
   };
 
   return (
@@ -50,33 +64,61 @@ export function ProjectCard({
       )}
     >
       <div className="relative aspect-video w-full overflow-hidden border-b border-border-subtle bg-surface-2">
-        {project.video ? (
-          <>
-            <Image
-              src={project.images[0]}
-              alt={project.title}
-              fill
-              sizes="(min-width: 1024px) 60vw, 100vw"
-              className={cn(
-                "object-cover transition-opacity duration-300",
-                hovering ? "opacity-0" : "opacity-100",
-              )}
-              priority={featured}
-            />
-            <video
-              ref={videoRef}
-              src={project.video}
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] text-white backdrop-blur">
-              <Play className="h-3 w-3" />
-              hover to play
-            </div>
-          </>
+        {hasVideo ? (
+          <AnimatePresence mode="wait" initial={false}>
+            {isVideoActive ? (
+              <motion.div
+                key="video"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="absolute inset-0"
+              >
+                <Image
+                  src={project.images[0]}
+                  alt={project.title}
+                  fill
+                  sizes="(min-width: 1024px) 60vw, 100vw"
+                  className={cn(
+                    "object-cover transition-opacity duration-300",
+                    hovering ? "opacity-0" : "opacity-100",
+                  )}
+                  priority={featured}
+                />
+                <video
+                  ref={videoRef}
+                  src={project.video}
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <div className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] text-white backdrop-blur">
+                  <Play className="h-3 w-3" />
+                  hover to play
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`shot-${activeMedia}`}
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="absolute inset-0"
+              >
+                <Image
+                  src={project.images[activeMedia as number]}
+                  alt={`${project.title} screenshot ${(activeMedia as number) + 1}`}
+                  fill
+                  sizes="(min-width: 1024px) 60vw, 100vw"
+                  className="object-cover"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         ) : (
           <Image
             src={project.images[activeImage]}
@@ -89,20 +131,59 @@ export function ProjectCard({
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
       </div>
 
-      {project.images.length > 1 && (
-        <div className="flex gap-2 border-b border-border-subtle bg-background/40 px-4 py-2">
+      {hasVideo ? (
+        <div className="flex gap-2 overflow-x-auto border-b border-border-subtle bg-background/40 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setActiveMedia("video")}
+            aria-label="Show video preview"
+            aria-current={isVideoActive}
+            className={cn(
+              "relative h-12 w-20 shrink-0 overflow-hidden rounded-md border-2 transition-colors",
+              isVideoActive
+                ? "border-accent"
+                : "border-transparent opacity-70 hover:opacity-100",
+            )}
+          >
+            <Image src={project.images[0]} alt="" fill sizes="80px" className="object-cover" />
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <Play className="h-3.5 w-3.5 text-white" />
+            </span>
+          </button>
           {project.images.map((img, i) => (
             <button
               key={img}
-              onClick={() => setActiveImage(i)}
-              className={cn(
-                "h-1.5 flex-1 rounded-full transition-colors",
-                i === activeImage ? "bg-accent" : "bg-border-subtle hover:bg-muted",
-              )}
+              type="button"
+              onClick={() => selectScreenshot(i)}
               aria-label={`Show screenshot ${i + 1}`}
-            />
+              aria-current={!isVideoActive && activeMedia === i}
+              className={cn(
+                "relative h-12 w-20 shrink-0 overflow-hidden rounded-md border-2 transition-colors",
+                !isVideoActive && activeMedia === i
+                  ? "border-accent"
+                  : "border-transparent opacity-70 hover:opacity-100",
+              )}
+            >
+              <Image src={img} alt="" fill sizes="80px" className="object-cover" />
+            </button>
           ))}
         </div>
+      ) : (
+        project.images.length > 1 && (
+          <div className="flex gap-2 border-b border-border-subtle bg-background/40 px-4 py-2">
+            {project.images.map((img, i) => (
+              <button
+                key={img}
+                onClick={() => setActiveImage(i)}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full transition-colors",
+                  i === activeImage ? "bg-accent" : "bg-border-subtle hover:bg-muted",
+                )}
+                aria-label={`Show screenshot ${i + 1}`}
+              />
+            ))}
+          </div>
+        )
       )}
 
       <div className="flex flex-1 flex-col gap-4 p-6">
